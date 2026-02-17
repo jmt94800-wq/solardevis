@@ -1,0 +1,5 @@
+{
+  "name": "SolarDevis Pro",
+  "description": "Une application professionnelle pour la génération de devis photovoltaïques à partir de données de consommation énergétique. Importez vos relevés, analysez les besoins et générez des devis structurés.",
+  "requestFramePermissions": []
+}
