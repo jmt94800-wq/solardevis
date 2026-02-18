@@ -11,7 +11,8 @@ export interface ProspectEntry {
   puissanceMaxW: number;
   dureeHj: number;
   quantite: number;
-  unitPrice?: number; // Prix d'achat ou base
+  inclusPuisCrete: boolean;
+  unitPrice?: number;
 }
 
 export interface ClientProfile {
@@ -30,4 +31,6 @@ export interface QuoteConfig {
   materialTaxPercent: number;
   installCost: number;
   installTaxPercent: number;
+  panelPowerW: number;
+  efficiencyPercent: number; // Nouveau : rendement de l'installation
 }

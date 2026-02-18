@@ -2,30 +2,42 @@
 import { ProspectEntry, ClientProfile } from './types';
 
 export const parseCSV = (csvText: string): ProspectEntry[] => {
-  const lines = csvText.split(/\r?\n/);
+  const lines = csvText.split(/\r?\n/).filter(line => line.trim());
   if (lines.length < 2) return [];
 
-  const headers = lines[0].replace(/^\ufeff/, '').split(';');
+  const delimiter = lines[0].includes(';') ? ';' : ',';
   
-  return lines.slice(1).filter(line => line.trim()).map((line, idx) => {
-    const values = line.split(';').map(v => v.replace(/^"|"$/g, '').trim());
-    const parseFrFloat = (val: string) => parseFloat(val.replace(',', '.'));
+  return lines.slice(1).map((line, idx) => {
+    const values = line.split(delimiter).map(v => v.replace(/^"|"$/g, '').trim());
+    const parseFrFloat = (val: string) => {
+      if (!val) return 0;
+      return parseFloat(val.replace(',', '.').replace(/[^0-9.-]/g, '')) || 0;
+    };
 
     return {
       id: `csv-${idx}-${Date.now()}`,
-      client: values[0],
-      lieu: values[1],
-      adresse: values[2],
-      date: values[3],
-      agent: values[4],
-      appareil: values[5],
-      puissanceHoraireKWh: parseFrFloat(values[6]) || 0,
-      puissanceMaxW: parseFrFloat(values[7]) || 0,
-      dureeHj: parseFrFloat(values[8]) || 0,
-      quantite: parseInt(values[9], 10) || 0,
+      client: values[0] || '',
+      lieu: values[1] || '',
+      adresse: values[2] || '',
+      date: values[3] || '',
+      agent: values[4] || '',
+      appareil: values[5] || '',
+      inclusPuisCrete: values[6] ? values[6].toUpperCase() === 'OUI' : true,
+      puissanceHoraireKWh: parseFrFloat(values[7]),
+      puissanceMaxW: parseFrFloat(values[8]),
+      dureeHj: parseFrFloat(values[9]),
+      quantite: parseInt(values[10], 10) || 0,
       unitPrice: 0
     };
   });
+};
+
+export const calculateTotals = (items: ProspectEntry[]) => {
+  // Consommation : Puissance Horaire (kWh) * Durée * Quantité
+  const dailyKWh = items.reduce((sum, i) => sum + (i.inclusPuisCrete ? i.puissanceHoraireKWh * i.dureeHj * i.quantite : 0), 0);
+  // Pic : Puissance Max (W) * Quantité
+  const maxW = items.reduce((sum, i) => sum + (i.inclusPuisCrete ? i.puissanceMaxW * i.quantite : 0), 0);
+  return { totalDailyKWh: dailyKWh, totalMaxW: maxW };
 };
 
 export const groupByClient = (entries: ProspectEntry[]): ClientProfile[] => {
@@ -39,26 +51,25 @@ export const groupByClient = (entries: ProspectEntry[]): ClientProfile[] => {
 
   return Object.values(groups).map(items => {
     const first = items[0];
+    const totals = calculateTotals(items);
     return {
       name: first.client,
       address: first.adresse,
       siteName: first.lieu,
       visitDate: first.date,
       items,
-      ...calculateTotals(items)
+      ...totals
     };
   });
 };
 
-export const calculateTotals = (items: ProspectEntry[]) => {
-  const dailyKWh = items.reduce((sum, i) => sum + (i.puissanceHoraireKWh * i.dureeHj * i.quantite), 0);
-  const maxW = items.reduce((sum, i) => sum + (i.puissanceMaxW * i.quantite), 0);
-  return { totalDailyKWh: dailyKWh, totalMaxW: maxW };
-};
-
-export const calculateSolarSpecs = (dailyKWh: number) => {
-  const neededKWp = dailyKWh / 3.5;
-  const panelCount = Math.ceil((neededKWp * 1000) / 425);
+export const calculateSolarSpecs = (dailyKWh: number, panelPowerW: number = 425, efficiencyPercent: number = 80) => {
+  const hsp = 5.2; 
+  const basicKWp = dailyKWh / hsp; 
+  const efficiencyFactor = efficiencyPercent / 100;
+  const neededKWp = basicKWp / efficiencyFactor;
+  
+  const panelCount = Math.ceil((neededKWp * 1000) / panelPowerW);
   return {
     neededKWp: parseFloat(neededKWp.toFixed(2)),
     panelCount
