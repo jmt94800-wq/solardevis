@@ -23,20 +23,20 @@ export const parseCSV = (csvText: string): ProspectEntry[] => {
       agent: values[4] || '',
       appareil: values[5] || '',
       inclusPuisCrete: values[6] ? values[6].toUpperCase() === 'OUI' : true,
-      puissanceHoraireKWh: parseFrFloat(values[7]),
-      puissanceMaxW: parseFrFloat(values[8]),
-      dureeHj: parseFrFloat(values[9]),
-      quantite: parseInt(values[10], 10) || 0,
+      puissanceHoraireKWh: Math.max(0, parseFrFloat(values[7])),
+      puissanceMaxW: Math.max(0, parseFrFloat(values[8])),
+      dureeHj: Math.max(0, parseFrFloat(values[9])),
+      quantite: Math.max(0, parseInt(values[10], 10) || 0),
       unitPrice: 0
     };
   });
 };
 
 export const calculateTotals = (items: ProspectEntry[]) => {
-  // Consommation : Puissance Horaire (kWh) * Durée * Quantité
-  const dailyKWh = items.reduce((sum, i) => sum + (i.inclusPuisCrete ? i.puissanceHoraireKWh * i.dureeHj * i.quantite : 0), 0);
-  // Pic : Puissance Max (W) * Quantité
-  const maxW = items.reduce((sum, i) => sum + (i.inclusPuisCrete ? i.puissanceMaxW * i.quantite : 0), 0);
+  // Consommation : Puissance Horaire (kWh) * Durée * Quantité (uniquement si quantité > 0)
+  const dailyKWh = items.reduce((sum, i) => sum + (i.inclusPuisCrete && i.quantite > 0 ? i.puissanceHoraireKWh * i.dureeHj * i.quantite : 0), 0);
+  // Pic : Puissance Max (W) * Quantité (uniquement si quantité > 0)
+  const maxW = items.reduce((sum, i) => sum + (i.inclusPuisCrete && i.quantite > 0 ? i.puissanceMaxW * i.quantite : 0), 0);
   return { totalDailyKWh: dailyKWh, totalMaxW: maxW };
 };
 
@@ -66,10 +66,10 @@ export const groupByClient = (entries: ProspectEntry[]): ClientProfile[] => {
 export const calculateSolarSpecs = (dailyKWh: number, panelPowerW: number = 425, efficiencyPercent: number = 80) => {
   const hsp = 5.2; 
   const basicKWp = dailyKWh / hsp; 
-  const efficiencyFactor = efficiencyPercent / 100;
+  const efficiencyFactor = Math.max(0.1, efficiencyPercent / 100);
   const neededKWp = basicKWp / efficiencyFactor;
   
-  const panelCount = Math.ceil((neededKWp * 1000) / panelPowerW);
+  const panelCount = Math.ceil((neededKWp * 1000) / Math.max(1, panelPowerW));
   return {
     neededKWp: parseFloat(neededKWp.toFixed(2)),
     panelCount

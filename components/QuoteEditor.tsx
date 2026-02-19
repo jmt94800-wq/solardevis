@@ -54,7 +54,12 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
   const updateItem = (id: string, field: keyof ProspectEntry, value: any) => {
     setItems(items.map(item => {
       if (item.id === id) {
-        return { ...item, [field]: value };
+        let finalValue = value;
+        // Validation stricte des nombres
+        if (typeof value === 'number') {
+          finalValue = Math.max(0, value);
+        }
+        return { ...item, [field]: finalValue };
       }
       return item;
     }));
@@ -109,7 +114,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
         <div className="flex gap-3">
           <button onClick={onCancel} className="px-4 py-2 text-slate-500 font-medium hover:text-slate-800 transition-colors">Annuler</button>
           <button onClick={handleSubmit} className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all">
-            Générer le Devis
+            Générer le Devis ($)
           </button>
         </div>
       </div>
@@ -160,9 +165,9 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rendement (%)</label>
             <div className="relative">
               <input 
-                type="number" 
+                type="number" min="0" max="100"
                 value={config.efficiencyPercent}
-                onChange={(e) => setConfig({...config, efficiencyPercent: parseInt(e.target.value) || 0})}
+                onChange={(e) => setConfig({...config, efficiencyPercent: Math.max(0, parseInt(e.target.value) || 0)})}
                 className="w-20 bg-slate-800 border border-slate-700 rounded-lg p-2 text-center font-black text-white outline-none focus:ring-2 focus:ring-blue-500"
               />
               <span className="absolute right-2 top-2 text-[9px] font-bold text-slate-500">%</span>
@@ -175,9 +180,9 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Panneau (W)</label>
             <div className="relative">
               <input 
-                type="number" 
+                type="number" min="1"
                 value={config.panelPowerW}
-                onChange={(e) => setConfig({...config, panelPowerW: parseInt(e.target.value) || 0})}
+                onChange={(e) => setConfig({...config, panelPowerW: Math.max(1, parseInt(e.target.value) || 0)})}
                 className="w-24 bg-slate-800 border border-slate-700 rounded-lg p-2 text-center font-black text-white outline-none focus:ring-2 focus:ring-blue-500"
               />
               <span className="absolute right-2 top-2 text-[9px] font-bold text-slate-500">W</span>
@@ -235,7 +240,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   <div className="col-span-2">
                     <div className="relative">
                       <input 
-                        type="number" step="0.001" value={item.puissanceHoraireKWh} 
+                        type="number" step="0.001" min="0" value={item.puissanceHoraireKWh} 
                         onChange={(e) => updateItem(item.id, 'puissanceHoraireKWh', parseFloat(e.target.value) || 0)}
                         className="w-full bg-slate-50 border-none rounded-lg text-sm p-2.5 text-center font-bold text-blue-600"
                       />
@@ -245,7 +250,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   <div className="col-span-1">
                     <div className="relative">
                       <input 
-                        type="number" value={item.puissanceMaxW} 
+                        type="number" min="0" value={item.puissanceMaxW} 
                         onChange={(e) => updateItem(item.id, 'puissanceMaxW', parseFloat(e.target.value) || 0)}
                         className="w-full bg-slate-50 border-none rounded-lg text-sm p-2.5 text-center font-bold"
                       />
@@ -254,14 +259,14 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   </div>
                   <div className="col-span-1">
                     <input 
-                      type="number" step="0.5" value={item.dureeHj} 
+                      type="number" step="0.5" min="0" value={item.dureeHj} 
                       onChange={(e) => updateItem(item.id, 'dureeHj', parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border-none rounded-lg text-sm p-2.5 text-center font-medium text-slate-600"
                     />
                   </div>
                   <div className="col-span-1">
                     <input 
-                      type="number" value={item.quantite} 
+                      type="number" min="0" value={item.quantite} 
                       onChange={(e) => updateItem(item.id, 'quantite', parseInt(e.target.value) || 0)}
                       className="w-full bg-slate-50 border-none rounded-lg text-sm p-2.5 text-center font-black"
                     />
@@ -277,7 +282,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   <div className="col-span-2">
                     <div className="relative">
                       <input 
-                        type="number" value={item.unitPrice} 
+                        type="number" min="0" value={item.unitPrice} 
                         onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                         className="w-full bg-slate-50 border-none rounded-lg text-sm p-2.5 text-right font-bold pr-6"
                       />
@@ -302,7 +307,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
           </div>
           <div className="mt-4 p-4 bg-slate-50 rounded-xl text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-3">
              <i className="fa-solid fa-circle-info text-blue-500 text-sm"></i>
-             La consommation (kWh/j) est calculée via la colonne "Conso Horaire (kWh)". La puissance (W) sert uniquement à identifier le pic de puissance de l'onduleur.
+             La consommation (kWh/j) est calculée via la colonne "Conso Horaire (kWh)". La puissance (W) sert uniquement à identifier le pic de puissance de l'onduleur. Les lignes avec quantité ou prix à 0 ne figureront pas sur le devis final.
           </div>
         </div>
 
@@ -317,8 +322,8 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Marge Matériel (%)</label>
                   <div className="relative">
                     <input 
-                      type="number" value={config.marginPercent} 
-                      onChange={(e) => setConfig({...config, marginPercent: parseFloat(e.target.value) || 0})}
+                      type="number" min="0" value={config.marginPercent} 
+                      onChange={(e) => setConfig({...config, marginPercent: Math.max(0, parseFloat(e.target.value) || 0)})}
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3.5 text-sm font-black focus:ring-2 focus:ring-blue-500 outline-none pr-10"
                     />
                     <span className="absolute right-4 top-4 text-slate-500 font-bold">%</span>
@@ -328,8 +333,8 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Remise Client (%)</label>
                   <div className="relative">
                     <input 
-                      type="number" value={config.discountPercent} 
-                      onChange={(e) => setConfig({...config, discountPercent: parseFloat(e.target.value) || 0})}
+                      type="number" min="0" max="100" value={config.discountPercent} 
+                      onChange={(e) => setConfig({...config, discountPercent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0))})}
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3.5 text-sm font-black focus:ring-2 focus:ring-blue-500 outline-none pr-10"
                     />
                     <span className="absolute right-4 top-4 text-slate-500 font-bold">%</span>
@@ -341,8 +346,8 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Installation ($ HT)</label>
                 <div className="relative">
                   <input 
-                    type="number" value={config.installCost} 
-                    onChange={(e) => setConfig({...config, installCost: parseFloat(e.target.value) || 0})}
+                    type="number" min="0" value={config.installCost} 
+                    onChange={(e) => setConfig({...config, installCost: Math.max(0, parseFloat(e.target.value) || 0)})}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3.5 text-sm font-black focus:ring-2 focus:ring-blue-500 outline-none pr-10"
                   />
                   <span className="absolute right-4 top-4 text-slate-500 font-bold">$</span>
@@ -361,10 +366,10 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">TVA Matériel (%)</label>
                   <div className="relative">
                     <input 
-                      type="number" 
+                      type="number" min="0"
                       step="0.1"
                       value={config.materialTaxPercent}
-                      onChange={(e) => setConfig({...config, materialTaxPercent: parseFloat(e.target.value) || 0})}
+                      onChange={(e) => setConfig({...config, materialTaxPercent: Math.max(0, parseFloat(e.target.value) || 0)})}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-base font-black text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none pr-12"
                     />
                     <span className="absolute right-5 top-4.5 text-slate-400 font-bold">%</span>
@@ -375,10 +380,10 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">TVA Installation (%)</label>
                   <div className="relative">
                     <input 
-                      type="number" 
+                      type="number" min="0"
                       step="0.1"
                       value={config.installTaxPercent}
-                      onChange={(e) => setConfig({...config, installTaxPercent: parseFloat(e.target.value) || 0})}
+                      onChange={(e) => setConfig({...config, installTaxPercent: Math.max(0, parseFloat(e.target.value) || 0)})}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-base font-black text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none pr-12"
                     />
                     <span className="absolute right-5 top-4.5 text-slate-400 font-bold">%</span>

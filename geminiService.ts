@@ -3,8 +3,13 @@ import { GoogleGenAI } from "@google/genai";
 import { ClientProfile } from "./types";
 
 export const getEnergyAnalysis = async (profile: ClientProfile) => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    return "### ⚠️ Clé API manquante\n\nVeuillez configurer votre clé API pour bénéficier de l'analyse IA.";
+  }
+
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const prompt = `
       En tant qu'expert en énergie solaire pour le marché d'Haïti (HSP moyen 5.2), analyse le profil de consommation suivant.
       Client: ${profile.name}
@@ -13,7 +18,7 @@ export const getEnergyAnalysis = async (profile: ClientProfile) => {
       Puissance de crête (charges critiques): ${profile.totalMaxW} W
       
       Détails des appareils:
-      ${profile.items.map(i => `- ${i.appareil}: ${i.puissanceHoraireKWh}kWh/h, ${i.dureeHj}h/j, Qte: ${i.quantite} (Inclus crête: ${i.inclusPuisCrete ? 'OUI' : 'NON'})`).join('\n')}
+      ${profile.items.filter(i => i.quantite > 0).map(i => `- ${i.appareil}: ${i.puissanceHoraireKWh}kWh/h, ${i.dureeHj}h/j, Qte: ${i.quantite} (Inclus crête: ${i.inclusPuisCrete ? 'OUI' : 'NON'})`).join('\n')}
 
       Fournis une analyse professionnelle courte (en français) incluant:
       1. Évaluation du potentiel solaire local.
@@ -32,6 +37,10 @@ export const getEnergyAnalysis = async (profile: ClientProfile) => {
     return response.text;
   } catch (error: any) {
     console.error("Erreur Gemini:", error);
+    // Gestion spécifique de l'erreur RPC/XHR pour l'utilisateur
+    if (error.message?.includes('xhr error') || error.status === 'UNKNOWN') {
+      return "### ⚠️ Erreur de connexion IA\n\nLe service d'analyse rencontre une difficulté technique temporaire (Erreur réseau/RPC). Veuillez réessayer dans quelques instants ou vérifier votre connexion.";
+    }
     return `### ⚠️ Analyse indisponible\n\nImpossible de générer l'analyse automatique actuellement.\n\n**Raison :** ${error.message}`;
   }
 };
