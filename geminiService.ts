@@ -2,7 +2,18 @@
 import { GoogleGenAI } from "@google/genai";
 import { ClientProfile, QuoteConfig } from "./types";
 
-export const getEnergyAnalysis = async (profile: ClientProfile, config: QuoteConfig, grandTotal: number) => {
+export const getEnergyAnalysis = async (
+  profile: ClientProfile, 
+  config: QuoteConfig, 
+  financials: {
+    totalMaterialHT: number,
+    totalMaterialTTC: number,
+    installHT: number,
+    installTTC: number,
+    grandTotal: number,
+    discountAmount: number
+  }
+) => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     return "### ⚠️ Clé API manquante\n\nVeuillez configurer votre clé API pour bénéficier de l'analyse IA.";
@@ -10,35 +21,42 @@ export const getEnergyAnalysis = async (profile: ClientProfile, config: QuoteCon
 
   try {
     const ai = new GoogleGenAI({ apiKey });
+    
+    // Filtrage ultra-strict : uniquement les articles facturés
+    const itemsFactures = profile.items.filter(i => i.quantite > 0 && (i.unitPrice || 0) > 0);
+
     const prompt = `
-      En tant qu'expert en énergie solaire pour le marché d'Haïti (HSP moyen 5.2), analyse ce DEVIS COMPLET.
-      
-      INFOS CLIENT & SITE:
-      - Client: ${profile.name}
-      - Adresse: ${profile.address}
-      
-      DONNÉES TECHNIQUES:
-      - Consommation journalière étudiée: ${profile.totalDailyKWh.toFixed(2)} kWh/j
-      - Puissance de crête (onduleur requis): ${profile.totalMaxW} W
-      - Rendement système configuré: ${config.efficiencyPercent}%
-      - Puissance panneaux utilisés: ${config.panelPowerW}W
-      
-      DÉTAILS FINANCIERS DU DEVIS:
-      - Montant Total Net (Taxes incluses): ${grandTotal.toLocaleString()} $
-      - Coût Installation: ${config.installCost} $
-      - Marge matériel appliquée: ${config.marginPercent}%
-      - Remise accordée: ${config.discountPercent}%
-      
-      ARTICLES PROPOSÉS (Quantité > 0):
-      ${profile.items.filter(i => i.quantite > 0).map(i => `- ${i.appareil}: Qte ${i.quantite}, P.U. ${i.unitPrice}$`).join('\n')}
+      TU ES UN SYSTÈME D'AUDIT SÉCURISÉ. TU NE DOIS UTILISER QUE LES DONNÉES FOURNIES CI-DESSOUS.
+      INTERDICTION FORMELLE : N'utilise pas de valeurs par défaut (ex: 425W) si elles ne sont pas spécifiées dans la CONFIGURATION RÉELLE.
 
-      TRAVAIL DEMANDÉ:
-      1. VÉRIFICATION DE COHÉRENCE : Le montant total de ${grandTotal}$ est-il réaliste pour un système de cette puissance en Haïti ?
-      2. ANALYSE TECHNIQUE : L'onduleur et les panneaux (selon les kWh/j) sont-ils bien proportionnés ?
-      3. RENTABILITÉ : En combien d'années ce système à ${grandTotal}$ sera-t-il rentabilisé par rapport à un coût du kWh réseau/génératrice à 0.50$ ?
-      4. RECOMMANDATIONS : Points de vigilance ou améliorations possibles.
+      === CONFIGURATION RÉELLE (VALEURS SOURCES) ===
+      - PUISSANCE PANNEAU UTILISÉE : ${config.panelPowerW} W (⚠️ C'est la SEULE valeur valable. N'évoque jamais 425W si ce n'est pas ce chiffre).
+      - RENDEMENT SYSTÈME : ${config.efficiencyPercent} %
+      - CONSOMMATION CIBLE : ${profile.totalDailyKWh.toFixed(2)} kWh/jour
+      - PUISSANCE CRÊTE REQUISE : ${profile.totalMaxW} W
 
-      Réponds de manière concise en Markdown avec des icônes pour faciliter la lecture.
+      === BILAN FINANCIER COMPLET (VÉRITÉ TERRAIN) ===
+      1. MATÉRIEL HT : ${financials.totalMaterialHT.toFixed(2)} $ (Inclut déjà la marge de ${config.marginPercent}%)
+      2. REMISE MATÉRIEL : -${financials.discountAmount.toFixed(2)} $
+      3. TAXES MATÉRIEL : ${(financials.totalMaterialTTC - (financials.totalMaterialHT - financials.discountAmount)).toFixed(2)} $
+      4. INSTALLATION & MAIN D'ŒUVRE HT : ${financials.installHT.toFixed(2)} $ (⚠️ OBLIGATOIRE : Doit être inclus dans le coût total)
+      5. TAXES INSTALLATION : ${(financials.installTTC - financials.installHT).toFixed(2)} $
+      6. MONTANT TOTAL NET À PAYER (TTC) : ${financials.grandTotal.toFixed(2)} $ (C'est la somme de TOUS les postes ci-dessus)
+
+      === LISTE DES ARTICLES FACTURÉS ===
+      ${itemsFactures.map(i => `- ${i.appareil} : Qte ${i.quantite} x P.U. Base ${i.unitPrice}$ HT`).join('\n')}
+      - SERVICE : Installation et Main d'œuvre (${financials.installHT.toFixed(2)}$ HT)
+
+      === INSTRUCTIONS D'ANALYSE ===
+      1. CALCUL DU ROI : Calcule le temps de retour sur investissement en divisant le MONTANT TOTAL TTC (${financials.grandTotal.toFixed(2)}$) par l'économie générée (base: 0.50$/kWh). 
+         *Note: Économie journalière = ${profile.totalDailyKWh.toFixed(2)} kWh * 0.50$ = ${(profile.totalDailyKWh * 0.50).toFixed(2)}$ / jour.*
+      2. CONTRÔLE DE COHÉRENCE : 
+         - Vérifie si les articles listés permettent de produire l'énergie nécessaire avec des panneaux de ${config.panelPowerW}W.
+         - Confirme que le prix final de ${financials.grandTotal.toFixed(2)}$ inclut bien les ${financials.installTTC.toFixed(2)}$ de l'installation.
+      3. CRITIQUE TECHNIQUE : L'onduleur et les batteries sont-ils adaptés au pic de ${profile.totalMaxW}W ?
+      4. ALERTES : Signale si un élément vital (onduleur/batterie/panneau) manque dans la liste des articles facturés.
+
+      Rédige une réponse structurée en Markdown. Ne mentionne JAMAIS de puissance de panneau autre que ${config.panelPowerW}W.
     `;
 
     const response = await ai.models.generateContent({
@@ -49,9 +67,6 @@ export const getEnergyAnalysis = async (profile: ClientProfile, config: QuoteCon
     return response.text;
   } catch (error: any) {
     console.error("Erreur Gemini:", error);
-    if (error.message?.includes('xhr error') || error.status === 'UNKNOWN') {
-      return "### ⚠️ Erreur de connexion IA\n\nLe service d'analyse rencontre une difficulté technique temporaire. Veuillez réessayer.";
-    }
-    return `### ⚠️ Analyse indisponible\n\n**Raison :** ${error.message}`;
+    return `### ⚠️ Analyse indisponible\n\n**Erreur :** ${error.message}`;
   }
 };

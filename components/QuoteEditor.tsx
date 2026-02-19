@@ -6,10 +6,11 @@ import { calculateTotals, calculateSolarSpecs } from '../utils';
 interface QuoteEditorProps {
   profile: ClientProfile;
   onSave: (updatedProfile: ClientProfile, config: QuoteConfig) => void;
+  onPersist: (updatedProfile: ClientProfile, config: QuoteConfig) => void;
   onCancel: () => void;
 }
 
-export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCancel }) => {
+export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onPersist, onCancel }) => {
   const [items, setItems] = useState<ProspectEntry[]>(() => {
     const baseItems = [...profile.items];
     const mandatoryLabels = ["Onduleur", "Panneau Solaire", "Batterie"];
@@ -22,7 +23,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
           lieu: profile.siteName,
           adresse: profile.address,
           date: profile.visitDate,
-          agent: "Système",
+          agent: profile.agentName,
           appareil: label,
           puissanceHoraireKWh: 0,
           puissanceMaxW: 0,
@@ -36,7 +37,9 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
     return baseItems;
   });
 
-  const [config, setConfig] = useState<QuoteConfig>({
+  const [localProfile, setLocalProfile] = useState<ClientProfile>(profile);
+
+  const [config, setConfig] = useState<QuoteConfig>(profile.savedConfig || {
     marginPercent: 20,
     discountPercent: 0,
     materialTaxPercent: 20,
@@ -47,6 +50,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
   });
 
   const [panelCountResult, setPanelCountResult] = useState<number | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const liveTotals = useMemo(() => calculateTotals(items), [items]);
   const liveSpecs = useMemo(() => calculateSolarSpecs(liveTotals.totalDailyKWh, config.panelPowerW, config.efficiencyPercent), [liveTotals.totalDailyKWh, config.panelPowerW, config.efficiencyPercent]);
@@ -55,7 +59,6 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
     setItems(items.map(item => {
       if (item.id === id) {
         let finalValue = value;
-        // Validation stricte des nombres
         if (typeof value === 'number') {
           finalValue = Math.max(0, value);
         }
@@ -72,7 +75,7 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
       lieu: profile.siteName,
       adresse: profile.address,
       date: profile.visitDate,
-      agent: "Manuel",
+      agent: localProfile.agentName,
       appareil: "Nouvel Appareil",
       puissanceHoraireKWh: 0.1,
       puissanceMaxW: 100,
@@ -92,9 +95,23 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
     setPanelCountResult(liveSpecs.panelCount);
   };
 
+  const handleQuickSave = () => {
+    setSaveStatus('saving');
+    const updatedProfile = { 
+      ...localProfile, 
+      items, 
+      totalDailyKWh: liveTotals.totalDailyKWh,
+      totalMaxW: liveTotals.totalMaxW,
+      savedAt: new Date().toISOString()
+    };
+    onPersist(updatedProfile, config);
+    setTimeout(() => setSaveStatus('saved'), 600);
+    setTimeout(() => setSaveStatus('idle'), 3000);
+  };
+
   const handleSubmit = () => {
     onSave({ 
-      ...profile, 
+      ...localProfile, 
       items, 
       totalDailyKWh: liveTotals.totalDailyKWh,
       totalMaxW: liveTotals.totalMaxW 
@@ -105,17 +122,65 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
     <div className="max-w-6xl mx-auto py-8 px-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
+          <button 
+            onClick={onCancel}
+            className="text-blue-600 font-bold text-xs uppercase tracking-widest flex items-center gap-2 mb-2 hover:translate-x-[-4px] transition-transform"
+          >
+            <i className="fa-solid fa-arrow-left"></i> Sommaire
+          </button>
           <h2 className="text-2xl font-black text-slate-900">Configuration du Devis</h2>
           <div className="flex items-center gap-2 mt-1">
              <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">HSP 5.2 • Rendement {config.efficiencyPercent}%</span>
-             <p className="text-slate-500 text-sm">Paramétrage pour {profile.name}.</p>
+             <p className="text-slate-500 text-sm">Projet pour {profile.name}.</p>
           </div>
         </div>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="px-4 py-2 text-slate-500 font-medium hover:text-slate-800 transition-colors">Annuler</button>
+          <button 
+            onClick={handleQuickSave} 
+            disabled={saveStatus === 'saving'}
+            className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 transition-all border ${saveStatus === 'saved' ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'}`}
+          >
+            {saveStatus === 'saving' ? (
+              <i className="fa-solid fa-circle-notch animate-spin"></i>
+            ) : saveStatus === 'saved' ? (
+              <i className="fa-solid fa-check"></i>
+            ) : (
+              <i className="fa-solid fa-floppy-disk"></i>
+            )}
+            {saveStatus === 'saved' ? 'Enregistré' : 'Sauvegarder'}
+          </button>
           <button onClick={handleSubmit} className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all">
             Générer le Devis ($)
           </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Agent Responsable de la Visite</label>
+          <div className="relative">
+            <span className="absolute left-4 top-3.5 text-slate-400"><i className="fa-solid fa-user-tie"></i></span>
+            <input 
+              type="text" 
+              value={localProfile.agentName}
+              onChange={(e) => setLocalProfile({...localProfile, agentName: e.target.value})}
+              placeholder="Nom de l'agent..."
+              className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 pl-10 pr-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Observations Générales de l'Audit</label>
+          <div className="relative">
+            <span className="absolute left-4 top-3.5 text-slate-400"><i className="fa-solid fa-comment-dots"></i></span>
+            <textarea 
+              rows={1}
+              value={localProfile.observations}
+              onChange={(e) => setLocalProfile({...localProfile, observations: e.target.value})}
+              placeholder="Notes sur le site, l'ombrage, les souhaits client..."
+              className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3 pl-10 pr-4 text-sm font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            />
+          </div>
         </div>
       </div>
 
@@ -304,10 +369,6 @@ export const QuoteEditor: React.FC<QuoteEditorProps> = ({ profile, onSave, onCan
                 </div>
               ))}
             </div>
-          </div>
-          <div className="mt-4 p-4 bg-slate-50 rounded-xl text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-3">
-             <i className="fa-solid fa-circle-info text-blue-500 text-sm"></i>
-             La consommation (kWh/j) est calculée via la colonne "Conso Horaire (kWh)". La puissance (W) sert uniquement à identifier le pic de puissance de l'onduleur. Les lignes avec quantité ou prix à 0 ne figureront pas sur le devis final.
           </div>
         </div>
 

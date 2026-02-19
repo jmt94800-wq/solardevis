@@ -27,15 +27,15 @@ export const parseCSV = (csvText: string): ProspectEntry[] => {
       puissanceMaxW: Math.max(0, parseFrFloat(values[8])),
       dureeHj: Math.max(0, parseFrFloat(values[9])),
       quantite: Math.max(0, parseInt(values[10], 10) || 0),
-      unitPrice: 0
+      unitPrice: 0,
+      observations: values[11] || '',
+      agentName: values[12] || values[4] || '' // Fallback sur la colonne agent si colonne 12 vide
     };
   });
 };
 
 export const calculateTotals = (items: ProspectEntry[]) => {
-  // Consommation : Puissance Horaire (kWh) * Durée * Quantité (uniquement si quantité > 0)
   const dailyKWh = items.reduce((sum, i) => sum + (i.inclusPuisCrete && i.quantite > 0 ? i.puissanceHoraireKWh * i.dureeHj * i.quantite : 0), 0);
-  // Pic : Puissance Max (W) * Quantité (uniquement si quantité > 0)
   const maxW = items.reduce((sum, i) => sum + (i.inclusPuisCrete && i.quantite > 0 ? i.puissanceMaxW * i.quantite : 0), 0);
   return { totalDailyKWh: dailyKWh, totalMaxW: maxW };
 };
@@ -58,6 +58,8 @@ export const groupByClient = (entries: ProspectEntry[]): ClientProfile[] => {
       siteName: first.lieu,
       visitDate: first.date,
       items,
+      observations: first.observations || '',
+      agentName: first.agentName || first.agent || '',
       ...totals
     };
   });

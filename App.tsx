@@ -6,8 +6,11 @@ import { Dashboard } from './components/Dashboard';
 import { QuoteEditor } from './components/QuoteEditor';
 import { QuoteGenerator } from './components/QuoteGenerator';
 
+const STORAGE_KEY = 'solardevis_pro_saved_quotes';
+
 const App: React.FC = () => {
   const [profiles, setProfiles] = useState<ClientProfile[]>([]);
+  const [savedProfiles, setSavedProfiles] = useState<ClientProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<ClientProfile | null>(null);
   const [quoteConfig, setQuoteConfig] = useState<QuoteConfig | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -16,9 +19,19 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Vérification de la clé API standardisée
+    // API KEY check
     const apiKey = process.env.API_KEY;
     setIsKeyMissing(!apiKey);
+
+    // Load saved quotes from localStorage
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        setSavedProfiles(JSON.parse(stored));
+      } catch (e) {
+        console.error("Failed to load saved quotes", e);
+      }
+    }
   }, []);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,6 +54,8 @@ const App: React.FC = () => {
       }
     };
     reader.readAsText(file);
+    // Reset input to allow same file upload
+    event.target.value = '';
   };
 
   const handleProfileSelect = (profile: ClientProfile) => {
@@ -48,9 +63,39 @@ const App: React.FC = () => {
     setIsEditing(true);
   };
 
+  const handlePersistQuote = (updatedProfile: ClientProfile, config: QuoteConfig) => {
+    const profileToSave = { ...updatedProfile, savedConfig: config };
+    const newSaved = [...savedProfiles];
+    const existingIndex = newSaved.findIndex(p => p.name === profileToSave.name && p.address === profileToSave.address);
+    
+    if (existingIndex > -1) {
+      newSaved[existingIndex] = profileToSave;
+    } else {
+      newSaved.unshift(profileToSave);
+    }
+    
+    setSavedProfiles(newSaved);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newSaved));
+  };
+
+  const handleDeleteSaved = (name: string, address: string) => {
+    const newSaved = savedProfiles.filter(p => !(p.name === name && p.address === address));
+    setSavedProfiles(newSaved);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newSaved));
+  };
+
   const handleSaveQuote = (updatedProfile: ClientProfile, config: QuoteConfig) => {
+    // Temporary save for the generator view
     setSelectedProfile(updatedProfile);
     setQuoteConfig(config);
+    setIsEditing(false);
+    // Also persist it in storage automatically
+    handlePersistQuote(updatedProfile, config);
+  };
+
+  const returnToSummary = () => {
+    setSelectedProfile(null);
+    setQuoteConfig(null);
     setIsEditing(false);
   };
 
@@ -60,7 +105,8 @@ const App: React.FC = () => {
         <QuoteEditor 
           profile={selectedProfile} 
           onSave={handleSaveQuote} 
-          onCancel={() => { setSelectedProfile(null); setIsEditing(false); }} 
+          onPersist={handlePersistQuote}
+          onCancel={returnToSummary} 
         />
       </div>
     );
@@ -87,27 +133,35 @@ const App: React.FC = () => {
         </div>
       )}
       
-      <nav className="bg-white border-b border-slate-200 px-8 py-5 flex justify-between items-center sticky top-0 z-10">
+      <nav className="bg-white border-b border-slate-200 px-8 py-5 flex justify-between items-center sticky top-0 z-10 no-print">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-xl">
             <i className="fa-solid fa-sun text-white"></i>
           </div>
           <h1 className="text-xl font-black text-slate-900">SolarDevis <span className="text-blue-600">Pro</span></h1>
         </div>
-        {profiles.length > 0 && (
+        <div className="flex items-center gap-6">
           <button 
-            onClick={() => { setProfiles([]); setSelectedProfile(null); }}
-            className="text-xs font-bold text-red-400 hover:text-red-600 uppercase tracking-widest"
+            onClick={returnToSummary}
+            className="text-xs font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-colors"
           >
-            Réinitialiser
+            Sommaire
           </button>
-        )}
+          {profiles.length > 0 && (
+            <button 
+              onClick={() => { setProfiles([]); setSelectedProfile(null); }}
+              className="text-xs font-bold text-red-400 hover:text-red-600 uppercase tracking-widest"
+            >
+              Réinitialiser Imports
+            </button>
+          )}
+        </div>
       </nav>
 
       <main className="flex-1 container mx-auto px-6 py-12">
         {error && <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl font-medium">{error}</div>}
 
-        {profiles.length === 0 ? (
+        {profiles.length === 0 && savedProfiles.length === 0 ? (
           <div className="max-w-xl mx-auto text-center py-20">
             <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
               <i className="fa-solid fa-file-csv text-3xl"></i>
@@ -127,23 +181,29 @@ const App: React.FC = () => {
           <div className="max-w-5xl mx-auto">
             <div className="flex justify-between items-end mb-10">
               <div>
-                <h2 className="text-3xl font-black text-slate-900">Projets Détectés</h2>
-                <p className="text-slate-500 font-medium">Sélectionnez un client pour configurer le prix.</p>
+                <h2 className="text-3xl font-black text-slate-900">Tableau de bord</h2>
+                <p className="text-slate-500 font-medium">Gérez vos audits importés et vos devis enregistrés.</p>
               </div>
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="text-blue-600 font-bold flex items-center gap-2 hover:underline"
+                className="bg-white border border-slate-200 text-blue-600 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm"
               >
-                <i className="fa-solid fa-plus"></i> Nouveau fichier
+                <i className="fa-solid fa-plus"></i> Nouvel Audit (CSV)
                 <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" className="hidden" />
               </button>
             </div>
-            <Dashboard profiles={profiles} onSelect={handleProfileSelect} />
+            
+            <Dashboard 
+              profiles={profiles} 
+              savedProfiles={savedProfiles} 
+              onSelect={handleProfileSelect} 
+              onDeleteSaved={handleDeleteSaved}
+            />
           </div>
         )}
       </main>
 
-      <footer className="py-10 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+      <footer className="py-10 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest no-print">
         &copy; 2024 SolarDevis Pro • Outil interne réservé aux agents certifiés
       </footer>
     </div>

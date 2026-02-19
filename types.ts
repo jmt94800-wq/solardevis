@@ -13,6 +13,8 @@ export interface ProspectEntry {
   quantite: number;
   inclusPuisCrete: boolean;
   unitPrice?: number;
+  observations?: string;
+  agentName?: string;
 }
 
 export interface ClientProfile {
@@ -23,6 +25,10 @@ export interface ClientProfile {
   items: ProspectEntry[];
   totalDailyKWh: number;
   totalMaxW: number;
+  observations: string;
+  agentName: string;
+  savedAt?: string;
+  savedConfig?: QuoteConfig;
 }
 
 export interface QuoteConfig {
@@ -32,5 +38,5 @@ export interface QuoteConfig {
   installCost: number;
   installTaxPercent: number;
   panelPowerW: number;
-  efficiencyPercent: number; // Nouveau : rendement de l'installation
+  efficiencyPercent: number;
 }

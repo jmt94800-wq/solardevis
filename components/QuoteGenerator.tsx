@@ -16,6 +16,7 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
   
   const specs = calculateSolarSpecs(profile.totalDailyKWh, config.panelPowerW, config.efficiencyPercent);
 
+  // Calculs financiers précis
   const materialMarginMultiplier = 1 + (config.marginPercent / 100);
   const visibleItems = profile.items.filter(item => item.quantite > 0 && (item.unitPrice || 0) > 0);
   
@@ -27,10 +28,30 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
   const installTax = Math.round(config.installCost * (config.installTaxPercent / 100) * 100) / 100;
   const grandTotal = totalMaterialAfterDiscount + materialTax + config.installCost + installTax;
 
+  // Calcul des arrhes
+  const depositPercent = grandTotal > 1000 ? 30 : 50;
+  const depositAmount = grandTotal * (depositPercent / 100);
+
   useEffect(() => {
     const fetchAnalysis = async () => {
       setLoading(true);
-      const res = await getEnergyAnalysis(profile, config, grandTotal);
+      
+      const financials = {
+        totalMaterialHT: totalMaterialHT_Base,
+        totalMaterialTTC: totalMaterialAfterDiscount + materialTax,
+        installHT: config.installCost,
+        installTTC: config.installCost + installTax,
+        grandTotal: grandTotal,
+        discountAmount: discountAmount
+      };
+
+      // On s'assure que le profil envoyé à l'IA contient bien les items filtrés pour éviter toute confusion
+      const filteredProfile = {
+        ...profile,
+        items: visibleItems
+      };
+
+      const res = await getEnergyAnalysis(filteredProfile, config, financials);
       setAnalysis(res || '');
       setLoading(false);
     };
@@ -59,7 +80,7 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
       </div>
 
       <div className="bg-white shadow-xl overflow-hidden border border-slate-100 quote-container print:shadow-none print:border-none" id="printable-quote">
-        {/* Header réduit */}
+        {/* Header */}
         <div className="p-4 border-b border-slate-100 flex justify-between items-center print:p-2">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -77,7 +98,7 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
         </div>
 
         <div className="p-4 print:p-2">
-          {/* Infos Client Réduites */}
+          {/* Client Info */}
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <h3 className="text-[8px] font-black uppercase tracking-widest text-blue-600 mb-1">Client</h3>
@@ -87,12 +108,12 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
             </div>
             <div className="text-right">
               <h3 className="text-[8px] font-black uppercase tracking-widest text-blue-600 mb-1">Émetteur</h3>
-              <p className="text-xs font-bold text-slate-800">Expert Solaire Certifié</p>
+              <p className="text-xs font-bold text-slate-800">{profile.agentName || 'Expert Solaire Certifié'}</p>
               <p className="text-slate-400 text-[8px] mt-0.5 uppercase font-medium">HSP: 5.2 | Rendement: {config.efficiencyPercent}%</p>
             </div>
           </div>
 
-          {/* Stats de Dimensionnement Compactes */}
+          {/* Stats */}
           <div className="grid grid-cols-2 gap-2 mb-4">
             <div className="bg-slate-50 rounded-lg p-2 border border-slate-100 flex items-center justify-between">
               <div>
@@ -122,7 +143,7 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
             </div>
           </div>
 
-          {/* Tableau ultra compact */}
+          {/* Table */}
           <div className="mb-4">
             <table className="w-full text-left">
               <thead>
@@ -163,16 +184,16 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
             </table>
           </div>
 
-          {/* Totaux Compacts */}
+          {/* Totals */}
           <div className="flex justify-end mb-4">
             <div className="w-full max-w-[240px] space-y-1">
               <div className="flex justify-between text-slate-600 text-[10px]">
                 <span>Sous-total HT</span>
-                <span>{totalMaterialHT_Base.toLocaleString(undefined, { minimumFractionDigits: 2 })} $</span>
+                <span>{(totalMaterialHT_Base + config.installCost).toLocaleString(undefined, { minimumFractionDigits: 2 })} $</span>
               </div>
               {config.discountPercent > 0 && (
                 <div className="flex justify-between text-blue-700 font-bold text-[10px]">
-                  <span>Remise ({config.discountPercent}%)</span>
+                  <span>Remise Matériel ({config.discountPercent}%)</span>
                   <span>- {discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} $</span>
                 </div>
               )}
@@ -187,10 +208,11 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
             </div>
           </div>
 
-          {/* Signature Zone Compacte */}
+          {/* Signature & Conditions */}
           <div className="grid grid-cols-2 gap-4 mt-4 pt-2 border-t border-slate-100 print:mt-2">
-            <div className="text-slate-400 text-[7px] italic leading-tight">
-              Proposition valable 30 jours. La TCA est appliquée selon la réglementation haïtienne.
+            <div className="text-slate-400 text-[7px] italic leading-tight flex flex-col gap-1">
+              <p>Proposition valable 30 jours. La TCA est appliquée selon la réglementation haïtienne.</p>
+              <p className="text-slate-600 font-bold">Conditions de paiement : Acompte (arrhes) de {depositPercent}% soit {depositAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} $ dû à la signature pour validation de commande.</p>
             </div>
             <div className="flex flex-col items-end">
               <div className="text-[7px] font-black text-slate-900 uppercase mb-4 tracking-widest">Bon pour accord (Date et Signature)</div>
@@ -198,13 +220,13 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
             </div>
           </div>
 
-          {/* Analyse IA - Plus petite à l'impression */}
+          {/* AI Analysis */}
           <div className="mt-4 no-print border-t border-slate-100 pt-4 print:mt-2 print:border-none">
             <h3 className="text-sm font-black text-slate-900 mb-2 flex items-center gap-2">
-              <i className="fa-solid fa-wand-magic-sparkles text-blue-500 text-xs"></i> Vérification IA du Devis
+              <i className="fa-solid fa-wand-magic-sparkles text-blue-500 text-xs"></i> Audit Technique & Financier (IA)
             </h3>
             {loading ? (
-              <div className="text-[9px] text-slate-400 animate-pulse font-bold">Analyse de cohérence en cours...</div>
+              <div className="text-[9px] text-slate-400 animate-pulse font-bold">Vérification des calculs et de la cohérence technique...</div>
             ) : (
               <div className="bg-slate-50 rounded-lg p-3 text-slate-700 leading-tight text-[10px] print:p-0 print:bg-white print:text-[8px]">
                 <div dangerouslySetInnerHTML={{ __html: analysis.replace(/\n/g, '<br/>') }} />
@@ -213,7 +235,7 @@ export const QuoteGenerator: React.FC<QuoteGeneratorProps> = ({ profile, config,
           </div>
         </div>
 
-        {/* Footer no-print */}
+        {/* Footer */}
         <div className="bg-slate-900 p-4 flex justify-between items-center no-print">
           <div className="flex items-center gap-2">
              <i className="fa-solid fa-solar-panel text-blue-400 text-xs"></i>
